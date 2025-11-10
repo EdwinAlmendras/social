@@ -1,0 +1,15 @@
+- [x] implements uploader telegram using kmp
+- [x] implements social flow service ready to use
+- [x] platform-specific caption creation (YouTube, VK, TikTok, Rutube)
+- [x] entity resolver for content type detection (videos/shorts/clips)
+- [x] YouTube Shorts detection and original_url handling
+- [x] VK channel URL construction from uploader_id
+- [x] E2E tests for social flow service
+- [x] Configuration management (.config/entities.json)
+- [x] add parallel download (max configurable, default 5)
+- [x] parallel downloads with sequential uploads in CLI and Bot
+- [x] config command to set max parallel downloads
+- [ ] support proxies --proxies-file proxies.txt --proxy xxx.xxx.xxx
+- [ ] add service DeletedVideosService
+- [ ] add service DatabaseTelegram
+- [ ] create new user (profile creation in bot)
