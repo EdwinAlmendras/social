@@ -147,36 +147,31 @@ async def _run_upload(
     """Run the upload process asynchronously."""
     from telethon import TelegramClient
     from social.cli.upload_strategy import UploadStrategyFactory
-    import os
     
-    # Get session paths
-    session_file = session or os.getenv("TELEGRAM_SESSION_FILE", "uploader.session")
-    bot_session_file = bot_session or os.getenv("BOT_SESSION_FILE", "bot_session.session")
-    
-    # Get credentials from environment
-    api_id = os.getenv("TELEGRAM_API_ID")
-    api_hash = os.getenv("TELEGRAM_API_HASH")
-    bot_token = os.getenv("BOT_TOKEN")
-    
-    if not api_id or not api_hash:
-        console.print("[red]Error:[/red] TELEGRAM_API_ID and TELEGRAM_API_HASH must be set")
+    # Validate Telegram configuration
+    is_valid, error_msg = config.validate_telegram_config()
+    if not is_valid:
+        console.print(f"[red]Error:[/red] {error_msg}")
+        console.print("[yellow]Tip:[/yellow] Set these variables in ~/.config/social/.env")
         raise typer.Exit(1)
     
-    if not bot_token:
-        console.print("[red]Error:[/red] BOT_TOKEN must be set")
-        raise typer.Exit(1)
+    # Get session paths using centralized config
+    session_file = config.get_telegram_session_file(session)
+    bot_session_file = config.get_bot_session_file(bot_session)
     
     if not quiet:
         console.print("[cyan]🔌 Connecting to Telegram...[/cyan]")
+        console.print(f"[dim]Session file: {session_file}[/dim]")
+        console.print(f"[dim]Bot session file: {bot_session_file}[/dim]")
     
-    # Create clients
-    telegram_client = TelegramClient(session_file, int(api_id), api_hash)
-    bot_client = TelegramClient(bot_session_file, int(api_id), api_hash)
+    # Create clients using centralized config
+    telegram_client = TelegramClient(str(session_file), config.TELEGRAM_API_ID, config.TELEGRAM_API_HASH)
+    bot_client = TelegramClient(str(bot_session_file), config.TELEGRAM_API_ID, config.TELEGRAM_API_HASH)
     
     try:
         # Connect clients
         await telegram_client.start()
-        await bot_client.start(bot_token=bot_token)
+        await bot_client.start(bot_token=config.BOT_TOKEN)
         
         if not quiet:
             console.print("[green]✓ Connected to Telegram[/green]")

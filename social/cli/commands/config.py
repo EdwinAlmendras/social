@@ -25,8 +25,11 @@ def show(
             config_dict = {
                 'CONFIG_DIR': str(config.CONFIG_DIR),
                 'COOKIES_DIR': str(config.COOKIES_DIR),
+                'SESSIONS_DIR': str(config.SESSIONS_DIR),
                 'DOWNLOADS_DIR': str(config.DOWNLOADS_DIR),
                 'PLATFORMS_FILE': str(config.PLATFORMS_FILE),
+                'TELEGRAM_SESSION_FILE': str(config.TELEGRAM_SESSION_FILE),
+                'BOT_SESSION_FILE': str(config.BOT_SESSION_FILE),
                 'MAX_PARALLEL_DOWNLOADS': config.MAX_PARALLEL_DOWNLOADS,
             }
             console.print(json.dumps(config_dict, indent=2))
@@ -39,8 +42,11 @@ def show(
             settings = [
                 ("CONFIG_DIR", config.CONFIG_DIR, "✓" if config.CONFIG_DIR.exists() else "✗"),
                 ("COOKIES_DIR", config.COOKIES_DIR, "✓" if config.COOKIES_DIR.exists() else "✗"),
+                ("SESSIONS_DIR", config.SESSIONS_DIR, "✓" if config.SESSIONS_DIR.exists() else "✗"),
                 ("DOWNLOADS_DIR", config.DOWNLOADS_DIR, "✓" if config.DOWNLOADS_DIR.exists() else "✗"),
                 ("PLATFORMS_FILE", config.PLATFORMS_FILE, "✓" if config.PLATFORMS_FILE.exists() else "✗"),
+                ("TELEGRAM_SESSION_FILE", config.TELEGRAM_SESSION_FILE, "✓" if config.TELEGRAM_SESSION_FILE.exists() else "✗"),
+                ("BOT_SESSION_FILE", config.BOT_SESSION_FILE, "✓" if config.BOT_SESSION_FILE.exists() else "✗"),
                 ("MAX_PARALLEL_DOWNLOADS", str(config.MAX_PARALLEL_DOWNLOADS), ""),
             ]
             

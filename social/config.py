@@ -71,6 +71,22 @@ class Config:
         self.BOT_TOKEN = os.getenv('BOT_TOKEN', '')
         self.YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY', '')
         
+        # Telegram sessions directory
+        self.SESSIONS_DIR = self.CONFIG_DIR / "sessions"
+        
+        # Session files - check env vars first, then use centralized defaults
+        telegram_session_env = os.getenv("TELEGRAM_SESSION_FILE")
+        if telegram_session_env:
+            self.TELEGRAM_SESSION_FILE = Path(telegram_session_env)
+        else:
+            self.TELEGRAM_SESSION_FILE = self.SESSIONS_DIR / "uploader.session"
+        
+        bot_session_env = os.getenv("BOT_SESSION_FILE")
+        if bot_session_env:
+            self.BOT_SESSION_FILE = Path(bot_session_env)
+        else:
+            self.BOT_SESSION_FILE = self.SESSIONS_DIR / "bot.session"
+        
         # Parallel downloads configuration
         self.MAX_PARALLEL_DOWNLOADS = int(os.getenv('MAX_PARALLEL_DOWNLOADS', 5))
         logger.info(f"Max parallel downloads set to: {self.MAX_PARALLEL_DOWNLOADS}")
@@ -79,6 +95,7 @@ class Config:
         self.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         self.COOKIES_DIR.mkdir(parents=True, exist_ok=True)
         self.DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        self.SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
         
         count_cookies = len(list(self.COOKIES_DIR.glob("*.txt")))
         logger.info(f"Found {count_cookies} cookies in {self.COOKIES_DIR}")
@@ -116,5 +133,63 @@ class Config:
         else:
             logger.warning(f"Entities file {self.ENTITIES_FILE} not found, the app will not be able to use entities.")
             self.ENTITIES = {}
+    
+    def get_telegram_session_file(self, custom_session: str = None) -> Path:
+        """
+        Get the path to the Telegram session file.
+        
+        Args:
+            custom_session: Custom session file path (optional)
+            
+        Returns:
+            Path to the session file (centralized in config/sessions/)
+        """
+        if custom_session:
+            # If custom path is provided, check if it's absolute or relative
+            custom_path = Path(custom_session)
+            if custom_path.is_absolute():
+                return custom_path
+            else:
+                # Relative paths are resolved from sessions directory
+                return self.SESSIONS_DIR / custom_session
+        return self.TELEGRAM_SESSION_FILE
+    
+    def get_bot_session_file(self, custom_session: str = None) -> Path:
+        """
+        Get the path to the bot session file.
+        
+        Args:
+            custom_session: Custom session file path (optional)
+            
+        Returns:
+            Path to the bot session file (centralized in config/sessions/)
+        """
+        if custom_session:
+            # If custom path is provided, check if it's absolute or relative
+            custom_path = Path(custom_session)
+            if custom_path.is_absolute():
+                return custom_path
+            else:
+                # Relative paths are resolved from sessions directory
+                return self.SESSIONS_DIR / custom_session
+        return self.BOT_SESSION_FILE
+    
+    def validate_telegram_config(self) -> tuple[bool, str]:
+        """
+        Validate that all required Telegram configuration is present.
+        
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not self.TELEGRAM_API_ID or self.TELEGRAM_API_ID == 0:
+            return False, "TELEGRAM_API_ID is not set or invalid"
+        
+        if not self.TELEGRAM_API_HASH:
+            return False, "TELEGRAM_API_HASH is not set"
+        
+        if not self.BOT_TOKEN:
+            return False, "BOT_TOKEN is not set"
+        
+        return True, ""
 
 
