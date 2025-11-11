@@ -15,9 +15,28 @@ CLI tool for downloading videos from social media platforms (YouTube, VK, TikTok
 
 ## Installation
 
+### Prerequisites
+
+This project depends on a private repository `kmp`. You need access to:
+- https://github.com/EdwinAlmendras/kmp
+
+### Install
+
 ```bash
+# If kmp repository is private, authenticate with GitHub first
+# Option 1: Using SSH (recommended)
+pip install -e .
+
+# Option 2: Using HTTPS with token
+# Replace YOUR_TOKEN with your GitHub personal access token
+pip install git+https://<YOUR_TOKEN>@github.com/EdwinAlmendras/kmp.git
+pip install -e .
+
+# If you have access via SSH, the installation should work directly:
 pip install -e .
 ```
+
+**Note**: Make sure you have configured SSH keys or GitHub credentials before installing.
 
 Or with development dependencies:
 
@@ -131,6 +150,16 @@ pytest tests/unit
 # Run only e2e tests (requires credentials)
 pytest tests/e2e -m e2e
 ```
+
+## Dependencies
+
+### Private Repositories
+- **kmp**: https://github.com/EdwinAlmendras/kmp (private)
+  - Used for Telegram upload operations
+  - Requires GitHub access/authentication
+
+### Public Packages
+- yt-dlp, typer, rich, python-dotenv, telethon, requests, httpx, cloudscraper
 
 ## License
 

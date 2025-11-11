@@ -1,7 +1,9 @@
 """Main CLI application using Typer."""
 import typer
+import logging
 
 from social.cli.commands import download, config, info, upload, database, channel
+from social.logger import set_log_level
 
 app = typer.Typer(
     name="social",
@@ -20,13 +22,28 @@ app.add_typer(channel.app, name="channel", help="Get channel information from vi
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress all output except errors"),
     version: bool = typer.Option(False, "--version", help="Show version"),
 ):
     """Social media downloader CLI."""
     if version:
         typer.echo("social-downloader v0.1.0")
         raise typer.Exit()
+    
+    # Configurar nivel de logging basado en flags globales
+    if quiet:
+        set_log_level(logging.ERROR)
+    elif verbose:
+        set_log_level(logging.DEBUG)
+    else:
+        set_log_level(logging.INFO)
+    
+    # Guardar las opciones globales en el contexto para que los subcomandos puedan acceder
+    ctx.ensure_object(dict)
+    ctx.obj['verbose'] = verbose
+    ctx.obj['quiet'] = quiet
 
 
 if __name__ == "__main__":
