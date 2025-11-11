@@ -12,21 +12,25 @@ def get_env(key: str):
 
 class Config:
     def __init__(self, env_file = None):
+        
+        DEFAULT_CONFIG_DIR = Path.home() / ".config" / "social"
+        DEFAULT_CACHE_DIR = Path.home() / ".cache" / "social"
+        
         if not env_file:
-            env_file = Path.cwd() / ".config" / ".env"
+            env_file = DEFAULT_CONFIG_DIR / ".env"
         load_dotenv(env_file)
         config_dir_env = os.getenv("CONFIG_DIR")
         if config_dir_env:
             self.CONFIG_DIR = Path(config_dir_env)
         else:
             # First try .config in current working directory
-            current_dir_config = Path.cwd() / ".config"
+            current_dir_config = DEFAULT_CONFIG_DIR
             if current_dir_config.exists():
                 self.CONFIG_DIR = current_dir_config
                 logger.info(f"Using config directory from current directory: {self.CONFIG_DIR}")
             else:
-                logger.warning(f"CONFIG_DIR not set, using default config directory: {Path.home() / ".config" / "social"}")
-                self.CONFIG_DIR = Path.home() / ".config" / "social"
+                logger.warning(f"CONFIG_DIR not set, using default config directory: {DEFAULT_CONFIG_DIR}")
+                self.CONFIG_DIR = DEFAULT_CONFIG_DIR
 
         cookies_dir_env = os.getenv("COOKIES_DIR")
         if cookies_dir_env:
@@ -59,7 +63,7 @@ class Config:
             self.DOWNLOADS_DIR = Path(downloads_dir_env)
         else:
             logger.warning(f"DOWNLOADS_DIR not set, using default downloads directory: {self.CONFIG_DIR / "downloads"}")
-            self.DOWNLOADS_DIR = Path.cwd() / "downloads"
+            self.DOWNLOADS_DIR = DEFAULT_CACHE_DIR / "downloads"
         
         # Telegram credentials
         self.TELEGRAM_API_ID = int(os.getenv('TELEGRAM_API_ID', 0))
