@@ -9,7 +9,6 @@ from social.services.video_database import VideoDatabaseService
 from social.logger import logger
 from telethon import TelegramClient
 
-app = typer.Typer()
 console = Console()
 
 
@@ -20,8 +19,6 @@ def scan(
 ):
     """Scan Telegram group for video URLs and process them."""
     asyncio.run(_run_scan(group_id, limit, skip_duplicates))
-
-app.command()(scan)
 
 
 async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
