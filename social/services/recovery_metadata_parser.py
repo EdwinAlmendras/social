@@ -27,17 +27,24 @@ class RecoveryMetadataParser:
         
         lines = caption.strip().split('\n')
         
-        # Title from first word of first line (remove # if present)
+        # Title: extract from # until video ID or resolution (e.g. abc123, 720p)
         if lines:
             first_line = lines[0].strip()
-            parts = first_line.split()
-            if parts:
-                title = parts[0]
-                # Remove # if present
-                if title.startswith('#'):
-                    title = title[1:]
-                # Replace underscores with spaces
-                metadata['title'] = title.replace('_', ' ')
+            
+            # Split by special chars (￼, backtick)
+            before_special = re.split(r'[￼`]', first_line)[0].strip()
+            
+            # Split by spaces and build title until ID/resolution
+            words = before_special.split()
+            title_words = []
+            for word in words:
+                # Stop at IDs (abc123) or resolutions (720p, 1080p)
+                if re.match(r'^[a-zA-Z0-9_-]+\d+[a-zA-Z0-9]*$', word):
+                    break
+                title_words.append(word)
+            
+            if title_words:
+                metadata['title'] = ' '.join(title_words)
         
         # Channel: [👀 Channel: Name](URL) - markdown link format
         for line in lines:

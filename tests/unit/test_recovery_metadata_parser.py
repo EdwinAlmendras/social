@@ -16,7 +16,7 @@ https://www.youtube.com/shorts/zD2tyJysP8U"""
         
         metadata = RecoveryMetadataParser.parse(caption)
         
-        assert metadata['title'] == "I'mOld"
+        assert metadata['title'] == "#I'mOld"
         assert metadata['channel_name'] == 'Jemima Avison'
         assert metadata['channel_url'] == 'https://www.youtube.com/channel/UCnwewRbbRB05Z34foKOWJuA'
         assert metadata['video_url'] == 'https://www.youtube.com/shorts/zD2tyJysP8U'
@@ -32,7 +32,7 @@ https://www.youtube.com/watch?v=abc123"""
         
         metadata = RecoveryMetadataParser.parse(caption)
         
-        assert metadata['title'] == 'TestVideo'
+        assert metadata['title'] == '#TestVideo'
         assert metadata['channel_name'] == 'Test Channel'
         assert metadata['upload_date'] == datetime(2025, 3, 15)
     
@@ -47,7 +47,7 @@ https://www.youtube.com/watch?v=abc123"""
         
         metadata = RecoveryMetadataParser.parse(caption)
         
-        assert metadata['title'] == 'SimpleVideo'
+        assert metadata['title'] == '#SimpleVideo'
         assert metadata['video_url'] == 'https://www.youtube.com/watch?v=abc123'
         assert metadata['channel_name'] is None
         assert metadata['upload_date'] is None
@@ -58,7 +58,7 @@ https://www.youtube.com/watch?v=abc123"""
 https://www.youtube.com/watch?v=abc123"""
         
         metadata = RecoveryMetadataParser.parse(caption)
-        assert metadata['title'] == "I'mOld"
+        assert metadata['title'] == "#I'mOld"
     
     def test_parse_hashtag_with_underscore(self):
         caption = """#Test_Tag abc123 720p
@@ -66,5 +66,16 @@ https://www.youtube.com/watch?v=abc123"""
 https://www.youtube.com/watch?v=abc123"""
         
         metadata = RecoveryMetadataParser.parse(caption)
-        assert metadata['title'] == "Test Tag"
+        assert metadata['title'] == "#Test_Tag"
+    
+    def test_parse_multi_word_title(self):
+        caption = """#Im block this is my block ￼ `abc123` 720p
+
+[👀 Channel: Test](https://test.com)
+__📅 15.06.2025__
+
+https://test.com/abc123"""
+        
+        metadata = RecoveryMetadataParser.parse(caption)
+        assert metadata['title'] == '#Im block this is my block'
 
