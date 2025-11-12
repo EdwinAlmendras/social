@@ -24,10 +24,17 @@ def scan(
 async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
     config = Config()
     
+    is_valid, error_msg = config.validate_telegram_config()
+    if not is_valid:
+        console.print(f"[red]Error:[/red] {error_msg}")
+        raise typer.Exit(1)
+    
+    session_file = config.get_telegram_session_file(None)
+    
     telegram_client = TelegramClient(
-        str(config.session_file),
-        config.api_id,
-        config.api_hash
+        str(session_file),
+        config.TELEGRAM_API_ID,
+        config.TELEGRAM_API_HASH
     )
     
     await telegram_client.start()
