@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from telethon import TelegramClient
 import asyncio
+from collections import deque
 
 from social.config import Config
 from social.logger import get_logger
@@ -119,6 +120,15 @@ class SocialFlowService:
         
         return ContentType.VIDEO
     
+    async def _download_video_async(self, url: str, platform: Optional[Platform] = None) -> Dict[str, Any]:
+        """Download video asynchronously without blocking the event loop."""
+        loop = asyncio.get_event_loop()
+        info_dict = await loop.run_in_executor(
+            None,
+            lambda: self.downloader.download(url, platform=platform, donwload=True)
+        )
+        return info_dict
+
     async def process_video(
         self,
         url: str,
@@ -150,7 +160,7 @@ class SocialFlowService:
         try:
             # Step 1: Download video
             logger.info(f"Starting download process for: {url}")
-            info_dict = self.downloader.download(url, platform=platform, donwload=True)
+            info_dict = await self._download_video_async(url, platform=platform)
             
             # Get platform (either provided or detected)
             if platform is None:
@@ -221,6 +231,61 @@ class SocialFlowService:
                 'message': f"Failed to process video: {e}"
             }
     
+    async def _download_and_prepare(
+        self,
+        url: str,
+        platform: Optional[Platform],
+        entity_id: Optional[int],
+        topic_id: Optional[int]
+    ) -> Dict[str, Any]:
+        """Download video and prepare metadata without uploading."""
+        try:
+            logger.info(f"Starting download: {url}")
+            info_dict = await self._download_video_async(url, platform=platform)
+            
+            if platform is None:
+                extractor = info_dict.get('extractor', '').lower()
+                platform = self.downloader._get_platform_for_extractor(extractor)
+            
+            platform_name = platform.name
+            video_path = self._get_downloaded_file_path(info_dict, platform)
+            
+            if not video_path:
+                raise FileNotFoundError(f"Downloaded video file not found for {url}")
+            
+            caption_builder = platform.create_caption(info_dict)
+            caption = caption_builder.build_caption()
+            
+            if entity_id is None or topic_id is None:
+                content_type = self._determine_content_type(url, info_dict, platform)
+                resolver = self.entity_resolver_factory.get_resolver(platform_name)
+                resolved_entity_id, resolved_topic_id = resolver.resolve(content_type)
+                
+                if entity_id is None:
+                    entity_id = resolved_entity_id
+                if topic_id is None:
+                    topic_id = resolved_topic_id
+            
+            logger.info(f"Download completed: {url}")
+            return {
+                'success': True,
+                'url': url,
+                'video_path': video_path,
+                'caption': caption,
+                'platform_name': platform_name,
+                'entity_id': entity_id,
+                'topic_id': topic_id,
+                'content_type': self._determine_content_type(url, info_dict, platform)
+            }
+        except Exception as e:
+            logger.error(f"Download failed for {url}: {e}", exc_info=True)
+            return {
+                'success': False,
+                'url': url,
+                'error': str(e),
+                'message': f"Download failed: {e}"
+            }
+
     async def process_videos_batch(
         self,
         urls: List[str],
@@ -230,106 +295,86 @@ class SocialFlowService:
         topic_id: Optional[int] = None,
         max_parallel: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """
-        Process multiple videos with parallel downloads and sequential uploads.
-        
-        Args:
-            urls: List of video URLs to process
-            telegram_client: Telegram client for uploading (optional)
-            bot_client: Bot client for uploading (optional)
-            entity_id: Target Telegram entity ID (optional, auto-resolved if not provided)
-            topic_id: Target topic ID (optional, auto-resolved if not provided)
-            max_parallel: Max parallel downloads (default from config)
-        
-        Returns:
-            List of results for each URL
-        """
+        """Process videos with pipeline: parallel downloads (max 5) + sequential uploads."""
         if max_parallel is None:
             max_parallel = self.config.MAX_PARALLEL_DOWNLOADS
         
+        max_parallel = min(max_parallel, 5)
         logger.info(f"Processing {len(urls)} videos with max {max_parallel} parallel downloads")
         
-        # Step 1: Download all videos in parallel (limited by semaphore)
-        semaphore = asyncio.Semaphore(max_parallel)
-        download_tasks = []
+        if not urls:
+            return []
         
-        async def download_with_semaphore(url: str) -> Dict[str, Any]:
-            async with semaphore:
-                logger.info(f"Starting download: {url}")
-                try:
-                    # Download only (no upload)
-                    result = await self.process_video(
-                        url=url,
-                        telegram_client=None,  # Don't upload yet
-                        bot_client=None,
-                        entity_id=entity_id,
-                        topic_id=topic_id
-                    )
-                    logger.info(f"Download completed: {url}")
-                    return result
-                except Exception as e:
-                    logger.error(f"Download failed for {url}: {e}", exc_info=True)
-                    return {
-                        'success': False,
-                        'url': url,
-                        'error': str(e),
-                        'message': f"Download failed: {e}"
-                    }
-        
-        # Create download tasks for all URLs
-        for url in urls:
-            task = download_with_semaphore(url)
-            download_tasks.append(task)
-        
-        # Execute all downloads in parallel (limited by semaphore)
-        download_results = await asyncio.gather(*download_tasks, return_exceptions=True)
-        
-        # Step 2: Upload videos sequentially (one by one)
         final_results = []
-        successful_downloads = [r for r in download_results if isinstance(r, dict) and r.get('success')]
+        download_queue = deque(urls)
+        upload_queue = asyncio.Queue()
+        download_semaphore = asyncio.Semaphore(max_parallel)
+        download_tasks = set()
         
-        logger.info(f"Downloaded {len(successful_downloads)}/{len(urls)} videos successfully")
+        async def _download_with_semaphore(url, semaphore, entity_id, topic_id, queue):
+            async with semaphore:
+                result = await self._download_and_prepare(url, None, entity_id, topic_id)
+                await queue.put(result)
         
-        if telegram_client and bot_client:
-            logger.info("Starting sequential uploads...")
-            for i, result in enumerate(successful_downloads, 1):
+        async def download_worker():
+            """Download videos in parallel and add to upload queue."""
+            while download_queue or download_tasks:
+                if download_queue and len(download_tasks) < max_parallel:
+                    url = download_queue.popleft()
+                    task = asyncio.create_task(_download_with_semaphore(
+                        url, download_semaphore, entity_id, topic_id, upload_queue
+                    ))
+                    download_tasks.add(task)
+                    task.add_done_callback(download_tasks.discard)
+                else:
+                    if download_tasks:
+                        await asyncio.sleep(0.1)
+                    else:
+                        break
+            
+            if download_tasks:
+                await asyncio.gather(*download_tasks, return_exceptions=True)
+            
+            await upload_queue.put(None)
+        
+        async def upload_worker():
+            """Upload videos sequentially from queue."""
+            upload_count = 0
+            while True:
+                result = await upload_queue.get()
+                
+                if result is None:
+                    break
+                
+                if not result.get('success'):
+                    final_results.append(result)
+                    continue
+                
+                if not telegram_client or not bot_client:
+                    final_results.append(result)
+                    continue
+                
                 try:
                     video_path = result.get('video_path')
-                    caption = result.get('caption', '')
-                    platform_name = result.get('platform_name', '')
-                    
                     if not video_path or not video_path.exists():
-                        logger.warning(f"Video file not found for upload: {video_path}")
                         result['upload_status'] = 'failed'
                         result['upload_error'] = 'Video file not found'
                         final_results.append(result)
                         continue
                     
-                    logger.info(f"Uploading {i}/{len(successful_downloads)}: {video_path.name}")
+                    upload_count += 1
+                    logger.info(f"Uploading {upload_count}: {video_path.name}")
                     
-                    # Determine entity_id and topic_id if not provided
-                    upload_entity_id = entity_id
-                    upload_topic_id = topic_id
+                    upload_entity_id = result.get('entity_id', entity_id)
+                    upload_topic_id = result.get('topic_id', topic_id)
                     
-                    if upload_entity_id is None or upload_topic_id is None:
-                        # Use the resolved entity from download result
-                        resolver = self.entity_resolver_factory.get_resolver(platform_name)
-                        content_type = result.get('content_type', ContentType.VIDEO)
-                        resolved_entity_id, resolved_topic_id = resolver.resolve(content_type)
-                        
-                        if upload_entity_id is None:
-                            upload_entity_id = resolved_entity_id
-                        if upload_topic_id is None:
-                            upload_topic_id = resolved_topic_id
-                    
-                    # Upload to Telegram
                     upload_options: UploadOptions = {
                         'video': str(video_path),
                         'entity': upload_entity_id,
                         'reply_to': upload_topic_id or 1,
                         'client': telegram_client,
                         'bot_client': bot_client,
-                        'caption': caption
+                        'caption': result.get('caption', '')
                     }
                     await TelegramUploderService.upload(upload_options)
                     
@@ -337,18 +382,13 @@ class SocialFlowService:
                     logger.info(f"Upload completed: {video_path.name}")
                     
                 except Exception as e:
-                    logger.error(f"Upload failed for {result.get('video_path')}: {e}", exc_info=True)
+                    logger.error(f"Upload failed: {e}", exc_info=True)
                     result['upload_status'] = 'failed'
                     result['upload_error'] = str(e)
                 
                 final_results.append(result)
-        else:
-            logger.info("Telegram clients not provided, skipping uploads")
-            final_results = successful_downloads
         
-        # Add failed downloads to final results
-        failed_downloads = [r for r in download_results if not isinstance(r, dict) or not r.get('success')]
-        final_results.extend(failed_downloads)
+        await asyncio.gather(download_worker(), upload_worker())
         
         logger.info(f"Batch processing completed: {len(final_results)} total results")
         return final_results

@@ -36,6 +36,8 @@ pip install -e .
 pip install -e .
 ```
 
+- dependencies (Deno)
+
 **Note**: Make sure you have configured SSH keys or GitHub credentials before installing.
 
 Or with development dependencies:
