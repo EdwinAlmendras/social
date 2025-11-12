@@ -35,8 +35,8 @@ class TestVideoRecoveryService:
         
         caption = """#TestVideo abc123 720p
 
-👀 Channel: Test Channel (https://www.youtube.com/channel/UCtest)
-📅 15.06.2025
+[👀 Channel: Test Channel](https://www.youtube.com/channel/UCtest)
+__📅 15.06.2025__
 
 https://www.youtube.com/watch?v=abc123"""
         

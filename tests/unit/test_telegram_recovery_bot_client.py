@@ -54,9 +54,11 @@ class TestTelegramRecoveryBotClient:
             download_path=tmp_path
         )
         
-        assert result_path == video_file
+        # File should be renamed to abc123.mp4
+        expected_path = tmp_path / "abc123.mp4"
+        assert result_path == expected_path
         assert caption == mock_response2.text
-        assert video_file.exists()
+        assert expected_path.exists()
     
     @pytest.mark.asyncio
     async def test_recover_video_not_found(self, bot_client, mock_telegram_client):
@@ -168,6 +170,7 @@ class TestTelegramRecoveryBotClient:
             download_path=tmp_path
         )
         
-        assert result_path == video_file
+        expected_path = tmp_path / "abc123.mp4"
+        assert result_path == expected_path
         assert caption == "Caption"
 

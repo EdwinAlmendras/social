@@ -13,7 +13,13 @@ def get_env(key: str):
 class Config:
     def __init__(self, env_file = None):
         
-        DEFAULT_CONFIG_DIR = Path.home() / ".config" / "social"
+        
+        exists_config_dir = Path.cwd() / ".config"
+        if exists_config_dir.exists():
+            DEFAULT_CONFIG_DIR = exists_config_dir
+        else:
+            DEFAULT_CONFIG_DIR = Path.home() / ".config" / "social"
+        
         DEFAULT_CACHE_DIR = Path.home() / ".cache" / "social"
         
         if not env_file:

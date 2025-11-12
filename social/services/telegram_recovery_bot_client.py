@@ -50,8 +50,18 @@ class TelegramRecoveryBotClient:
                 if file_path is None:
                     raise ValueError("Failed to download video")
                 
-                video_file = Path(file_path)
-                logger.info(f"Recovered: {video_file.name}")
+                original_file = Path(file_path)
+                
+                # Rename to video_id.extension
+                from social.services.url_id_extractor import URLIDExtractor
+                video_id = URLIDExtractor.extract_id(video_url)
+                if video_id:
+                    new_name = f"{video_id}{original_file.suffix}"
+                    video_file = original_file.parent / new_name
+                    original_file.rename(video_file)
+                    logger.info(f"Renamed to: {video_file.name}")
+                else:
+                    video_file = original_file
                 
                 return video_file, caption
                 

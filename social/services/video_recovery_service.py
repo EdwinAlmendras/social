@@ -68,7 +68,6 @@ class VideoRecoveryService:
         """Rebuild caption using VideoCaptionBuilder."""
         upload_date = metadata.get('upload_date')
         if upload_date:
-            # Set time to None to avoid showing 0:00
             upload_date = upload_date.replace(hour=12, minute=0, second=0)
         else:
             upload_date = datetime.now().replace(hour=12, minute=0, second=0)
@@ -82,7 +81,12 @@ class VideoRecoveryService:
             likes=None,
             views=None
         )
-        return caption_builder.build_caption()
+        caption = caption_builder.build_caption()
+        
+        # Add deletion reason
+        caption += f"\n\n⚠️ Video eliminado - recuperado de archivo"
+        
+        return caption
     
     async def recover_videos_batch(self, video_urls: list[str], download_dir: Optional[Path] = None) -> list[Dict[str, Any]]:
         """Recover multiple videos sequentially."""
