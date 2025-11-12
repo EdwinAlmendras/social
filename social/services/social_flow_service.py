@@ -240,7 +240,7 @@ class SocialFlowService:
             if enable_recovery and self.recovery_service:
                 logger.info(f"Download failed, attempting recovery for: {url}")
                 try:
-                    recovery_result = await self.recovery_service.recover_video(url)
+                    recovery_result = await self.recovery_service.recover_video(url, error_message=str(e))
                     
                     if recovery_result['success']:
                         logger.info(f"Video recovered successfully: {url}")

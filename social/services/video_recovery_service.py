@@ -21,7 +21,7 @@ class VideoRecoveryService:
         self.bot_client = TelegramRecoveryBotClient(telegram_client)
         self.parser = RecoveryMetadataParser()
     
-    async def recover_video(self, video_url: str, download_dir: Optional[Path] = None) -> Dict[str, Any]:
+    async def recover_video(self, video_url: str, download_dir: Optional[Path] = None, error_message: Optional[str] = None) -> Dict[str, Any]:
         """Recover video and rebuild caption."""
         logger.info(f"Recovering: {video_url}")
         
@@ -64,7 +64,28 @@ class VideoRecoveryService:
                 'error': str(e)
             }
     
-    def _rebuild_caption(self, metadata: Dict[str, Any]) -> str:
+    def _parse_deletion_reason(self, error_message: Optional[str]) -> str:
+        """Parse yt-dlp error to short deletion reason."""
+        if not error_message:
+            return "Video deleted"
+        
+        error_lower = error_message.lower()
+        
+        # Error mappings
+        if "community guidelines" in error_lower or "violating youtube" in error_lower:
+            return "Deleted by YT Community Guidelines violation"
+        elif "copyright" in error_lower:
+            return "Deleted by copyright claim"
+        elif "private" in error_lower:
+            return "Video set to private"
+        elif "unavailable" in error_lower:
+            return "Video unavailable"
+        elif "removed" in error_lower:
+            return "Video removed by uploader"
+        else:
+            return "Video deleted"
+    
+    def _rebuild_caption(self, metadata: Dict[str, Any], error_message: Optional[str] = None) -> str:
         """Rebuild caption using VideoCaptionBuilder."""
         upload_date = metadata.get('upload_date')
         if upload_date:
@@ -84,7 +105,8 @@ class VideoRecoveryService:
         caption = caption_builder.build_caption()
         
         # Add deletion reason
-        caption += f"\n\n⚠️ Video eliminado - recuperado de archivo"
+        deletion_reason = self._parse_deletion_reason(error_message)
+        caption += f"\n\n⚠️ {deletion_reason}"
         
         return caption
     
