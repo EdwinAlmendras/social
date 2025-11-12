@@ -30,6 +30,7 @@ async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
         raise typer.Exit(1)
     
     session_file = config.get_telegram_session_file(None)
+    bot_session_file = config.get_bot_session_file(None)
     
     telegram_client = TelegramClient(
         str(session_file),
@@ -37,18 +38,25 @@ async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
         config.TELEGRAM_API_HASH
     )
     
+    bot_client = TelegramClient(
+        str(bot_session_file),
+        config.TELEGRAM_API_ID,
+        config.TELEGRAM_API_HASH
+    )
+    
     await telegram_client.start()
+    await bot_client.start(bot_token=config.BOT_TOKEN)
     
     try:
         scanner = TelegramMessageScanner(telegram_client)
         social_flow = SocialFlowService(config, telegram_client=telegram_client)
         
-        db_service = None
+        config.load_entities()
+        entities = getattr(config, 'ENTITIES', {})
+        
+        db_services = {}
         if skip_duplicates:
             try:
-                config.load_entities()
-                entities = getattr(config, 'ENTITIES', {})
-                
                 first_url = None
                 messages = await scanner.scan_group(group_id, limit=10)
                 for msg in messages:
@@ -73,9 +81,9 @@ async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
                                 console.print("Loading database...")
                                 await db_service.load()
                                 console.print(f"Loaded {len(db_service.video_ids)} IDs")
+                                db_services[platform] = db_service
             except Exception as e:
                 console.print(f"Warning: Could not load database: {e}")
-                db_service = None
         
         console.print(f"Scanning group {group_id}...")
         messages = await scanner.scan_group(group_id, limit)
@@ -94,14 +102,35 @@ async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
                     console.print(f"Skip: no ID - {url}")
                     continue
                 
+                platform = URLIDExtractor.detect_platform(url)
+                if not platform:
+                    console.print(f"Skip: unknown platform - {url}")
+                    continue
+                
+                db_service = db_services.get(platform)
+                
                 if db_service and db_service.is_duplicate(url):
                     console.print(f"Skip: duplicate - {video_id}")
                     skipped += 1
                     continue
                 
+                platform_config = entities.get(platform.lower(), {})
+                entity_id = platform_config.get('group_id')
+                topic_id = platform_config.get('topic_id')
+                
+                if not entity_id:
+                    console.print(f"Skip: no config for {platform} - {video_id}")
+                    continue
+                
                 console.print(f"Processing: {url}")
                 try:
-                    result = await social_flow.process_video(url)
+                    result = await social_flow.process_video(
+                        url,
+                        telegram_client=telegram_client,
+                        bot_client=bot_client,
+                        entity_id=entity_id,
+                        topic_id=topic_id
+                    )
                     if result.get('success'):
                         processed += 1
                         console.print(f"OK: {video_id}")
@@ -114,12 +143,14 @@ async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
                     failed += 1
                     console.print(f"ERROR: {e}")
         
-        if db_service and processed > 0:
-            console.print("Saving database...")
-            await db_service.save(new_ids_count=processed)
+        for platform, db_service in db_services.items():
+            if processed > 0:
+                console.print(f"Saving {platform} database...")
+                await db_service.save(new_ids_count=processed)
         
         console.print(f"\nDone: {processed} processed, {skipped} skipped, {failed} failed")
         
     finally:
         await telegram_client.disconnect()
+        await bot_client.disconnect()
 

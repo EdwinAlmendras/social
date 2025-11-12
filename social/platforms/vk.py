@@ -8,6 +8,7 @@ class VKPlatform(Platform):
     yt-dlp detecta automáticamente URLs de VK usando el extractor 'vk'.
     Esta clase solo proporciona configuración específica para VK.
     """
+    DEFAULT_CONCURRENT_FRAGMENTS = 10
     
     def __init__(self, name: str = "vk", config: dict = None, global_config=None):
         super().__init__(name, config, global_config)
