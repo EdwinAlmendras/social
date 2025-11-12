@@ -2,6 +2,10 @@
 
 CLI tool for downloading videos from social media platforms (YouTube, VK, TikTok, Rutube) and uploading them to Telegram with custom captions.
 
+## Errors
+- This video has been removed for violating YouTube's Community Guidelines
+
+
 ## Features
 
 - 📥 Download videos from multiple platforms (YouTube, VK, TikTok, Rutube)

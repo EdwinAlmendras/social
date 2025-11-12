@@ -2,7 +2,7 @@
 import typer
 import logging
 
-from social.cli.commands import download, config, info, upload, database, channel
+from social.cli.commands import download, config, info, upload, database, channel, scan
 from social.logger import set_log_level
 
 app = typer.Typer(
@@ -18,6 +18,7 @@ app.add_typer(database.app, name="database", help="Manage video ID database for 
 app.add_typer(config.app, name="config", help="Manage configuration and settings")
 app.add_typer(info.app, name="info", help="Get information about videos without downloading")
 app.add_typer(channel.app, name="channel", help="Get channel information from video or channel URLs")
+app.add_typer(scan.app, name="scan", help="Scan Telegram groups for video URLs")
 
 
 @app.callback()
