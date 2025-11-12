@@ -104,29 +104,10 @@ async def _sync(platform: Optional[str], session_file: Optional[str], all_platfo
                 else:
                     console.print("  [yellow]No existing database found, starting fresh[/yellow]")
                 
-                # Sync from content topic
-                console.print("  [cyan]Syncing new video IDs...[/cyan]")
+                # Sync from all messages in group (no topic filter)
+                console.print("  [cyan]Syncing new video IDs from all messages...[/cyan]")
                 
-                # Get content topics (videos and shorts)
-                topics = platform_config.get('topics', {})
-                videos_topic = topics.get('videos')
-                shorts_topic = topics.get('shorts')
-                
-                new_ids_total = 0
-                
-                # Sync from videos topic
-                if videos_topic:
-                    console.print(f"    Scanning videos topic ({videos_topic})...")
-                    new_ids = await db_service.sync(group_id, videos_topic)
-                    new_ids_total += new_ids
-                    console.print(f"    Found {new_ids} new IDs in videos")
-                
-                # Sync from shorts topic
-                if shorts_topic and shorts_topic != videos_topic:
-                    console.print(f"    Scanning shorts topic ({shorts_topic})...")
-                    new_ids = await db_service.sync(group_id, shorts_topic)
-                    new_ids_total += new_ids
-                    console.print(f"    Found {new_ids} new IDs in shorts")
+                new_ids_total = await db_service.sync(group_id, content_topic_id=None)
                 
                 console.print(f"  [green]Sync complete: {new_ids_total} new IDs[/green]")
                 console.print(f"  Total IDs in database: {len(db_service.video_ids)}")
