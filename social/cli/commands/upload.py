@@ -109,13 +109,9 @@ def upload(
         # Initialize config
         config = Config()
         
-        # Initialize service
-        service = SocialFlowService(config)
-        
-        # Run async upload
+        # Run async upload (service will be created inside with telegram_client)
         asyncio.run(_run_upload(
             parsed_urls,
-            service,
             session,
             bot_session,
             skip_errors,
@@ -134,7 +130,6 @@ def upload(
 
 async def _run_upload(
     urls: List[str],
-    service: SocialFlowService,
     session: Optional[str],
     bot_session: Optional[str],
     skip_errors: bool,
@@ -160,7 +155,7 @@ async def _run_upload(
     bot_session_file = config.get_bot_session_file(bot_session)
     
     if not quiet:
-        console.print("[cyan]🔌 Connecting to Telegram...[/cyan]")
+        console.print("[cyan]Connecting to Telegram...[/cyan]")
         console.print(f"[dim]Session file: {session_file}[/dim]")
         console.print(f"[dim]Bot session file: {bot_session_file}[/dim]")
     
@@ -174,7 +169,10 @@ async def _run_upload(
         await bot_client.start(bot_token=config.BOT_TOKEN)
         
         if not quiet:
-            console.print("[green]✓ Connected to Telegram[/green]")
+            console.print("[green]Connected to Telegram[/green]")
+        
+        # Initialize service with telegram_client for recovery support
+        service = SocialFlowService(config, telegram_client=telegram_client)
         
         # Create upload strategy
         strategy = UploadStrategyFactory.create(

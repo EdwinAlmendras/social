@@ -96,9 +96,15 @@ class VideoCaptionBuilder(CaptionFormatter):
         # Build the caption
         caption = f"[{self.title}]({self.video_url})\n"
         
-        # Add date and time
-        date_time = self.creation_date.strftime("%d.%m.%Y %H:%M").replace(" 0", " ")
-        caption += f"📅 {date_time}"
+        # Add date (and time if not midnight)
+        if self.creation_date.hour == 0 and self.creation_date.minute == 0:
+            # Only date, no time
+            date_str = self.creation_date.strftime("%d.%m.%Y")
+            caption += f"📅 {date_str}"
+        else:
+            # Date and time
+            date_time = self.creation_date.strftime("%d.%m.%Y %H:%M").replace(" 0", " ")
+            caption += f"📅 {date_time}"
         
         # Add views if provided (formatted)
         if self.views is not None:

@@ -8,6 +8,7 @@ from social.config import Config
 from social.logger import get_logger
 from social.services.YT_Downloader import YT_Downloader
 from social.services.telegram_uploader import TelegramUploderService, UploadOptions
+from social.services.video_recovery_service import VideoRecoveryService
 from social.platforms.base import Platform
 from social.core.entity_resolver import EntityResolverFactory, ContentType
 
@@ -22,12 +23,13 @@ class SocialFlowService:
     3. Upload to Telegram with the caption
     """
     
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, telegram_client: Optional[TelegramClient] = None):
         """
         Initialize the social flow service.
         
         Args:
             config: Config instance with platform and entity configurations
+            telegram_client: Optional TelegramClient for video recovery
         """
         self.config = config
         self.downloader = YT_Downloader(config)
@@ -35,6 +37,9 @@ class SocialFlowService:
         
         # Initialize entity resolver factory
         self.entity_resolver_factory = EntityResolverFactory(config.ENTITIES_FILE)
+        
+        # Initialize recovery service if telegram client provided
+        self.recovery_service = VideoRecoveryService(config, telegram_client) if telegram_client else None
     
     def _get_downloaded_file_path(self, info_dict: Dict[str, Any], platform: Platform) -> Optional[Path]:
         """
@@ -137,6 +142,7 @@ class SocialFlowService:
         bot_client: Optional[TelegramClient] = None,
         entity_id: Optional[int] = None,
         topic_id: Optional[int] = None,
+        enable_recovery: bool = True,
     ) -> Dict[str, Any]:
         """
         Complete flow: download video, create caption, and upload to Telegram.
@@ -148,6 +154,7 @@ class SocialFlowService:
             bot_client: Bot TelegramClient for uploading
             entity_id: Telegram entity (group/channel) ID (will use config if not provided)
             topic_id: Telegram topic ID for forum groups (will use config if not provided)
+            enable_recovery: Try recovery bot if download fails (default: True)
             
         Returns:
             Dict with result information including:
@@ -156,7 +163,9 @@ class SocialFlowService:
             - caption: Generated caption
             - platform_name: Detected platform name
             - message: Result message
+            - recovered: bool (True if video was recovered)
         """
+        recovered = False
         try:
             # Step 1: Download video
             logger.info(f"Starting download process for: {url}")
@@ -220,15 +229,78 @@ class SocialFlowService:
                 'video_path': video_path,
                 'caption': caption,
                 'platform_name': platform_name,
-                'message': f"Video processed successfully: {video_path.name}"
+                'message': f"Video processed successfully: {video_path.name}",
+                'recovered': recovered
             }
             
         except Exception as e:
             logger.error(f"Error processing video {url}: {e}", exc_info=True)
+            
+            # Try recovery if enabled and available
+            if enable_recovery and self.recovery_service:
+                logger.info(f"Download failed, attempting recovery for: {url}")
+                try:
+                    recovery_result = await self.recovery_service.recover_video(url)
+                    
+                    if recovery_result['success']:
+                        logger.info(f"Video recovered successfully: {url}")
+                        recovered = True
+                        video_path = recovery_result['video_path']
+                        caption = recovery_result['caption']
+                        
+                        # Resolve entity and topic if not provided
+                        if entity_id is None or topic_id is None:
+                            # Assume it's a short/clip since it was deleted
+                            content_type = ContentType.SHORT
+                            logger.debug(f"Recovered video assumed as: {content_type.value}")
+                            
+                            # Detect platform from URL
+                            from social.services.url_id_extractor import URLIDExtractor
+                            platform_name = URLIDExtractor.detect_platform(url) or 'youtube'
+                            
+                            resolver = self.entity_resolver_factory.get_resolver(platform_name)
+                            resolved_entity_id, resolved_topic_id = resolver.resolve(content_type)
+                            
+                            if entity_id is None:
+                                entity_id = resolved_entity_id
+                            if topic_id is None:
+                                topic_id = resolved_topic_id
+                            
+                            logger.info(f"Resolved upload target: entity={entity_id}, topic={topic_id}")
+                        
+                        # Upload recovered video if clients provided
+                        if telegram_client and bot_client and entity_id:
+                            logger.info(f"Uploading recovered video to Telegram")
+                            upload_options: UploadOptions = {
+                                'video': str(video_path),
+                                'entity': entity_id,
+                                'reply_to': topic_id or 1,
+                                'client': telegram_client,
+                                'bot_client': bot_client,
+                                'caption': caption
+                            }
+                            await TelegramUploderService.upload(upload_options)
+                            logger.info("Recovered video uploaded successfully to Telegram")
+                        
+                        return {
+                            'success': True,
+                            'video_path': video_path,
+                            'caption': caption,
+                            'platform_name': 'recovered',
+                            'message': f"Video recovered and uploaded: {video_path.name}",
+                            'recovered': True
+                        }
+                    else:
+                        logger.warning(f"Recovery failed: {recovery_result.get('error')}")
+                
+                except Exception as recovery_error:
+                    logger.error(f"Recovery attempt failed: {recovery_error}", exc_info=True)
+            
             return {
                 'success': False,
                 'error': str(e),
-                'message': f"Failed to process video: {e}"
+                'message': f"Failed to process video: {e}",
+                'recovered': False
             }
     
     async def _download_and_prepare(
