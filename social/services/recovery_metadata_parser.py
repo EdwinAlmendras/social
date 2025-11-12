@@ -39,9 +39,9 @@ class RecoveryMetadataParser:
                 # Replace underscores with spaces
                 metadata['title'] = title.replace('_', ' ')
         
-        # Channel: 👀 [Channel: Name] (URL)
+        # Channel: [👀 Channel: Name](URL) - markdown link format
         for line in lines:
-            channel_match = re.search(r'👀\s*\[Channel:\s*(.+?)\]\s*\((https?://[^\)]+)\)', line)
+            channel_match = re.search(r'\[👀 Channel:\s*(.+?)\]\((https?://[^\)]+)\)', line)
             if channel_match:
                 metadata['channel_name'] = channel_match.group(1).strip()
                 metadata['channel_url'] = channel_match.group(2).strip()

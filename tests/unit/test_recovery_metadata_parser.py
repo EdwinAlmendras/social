@@ -7,10 +7,10 @@ from social.services.recovery_metadata_parser import RecoveryMetadataParser
 class TestRecoveryMetadataParser:
     
     def test_parse_youtube_caption(self):
-        caption = """#I'mOld   zD2tyJysP8U 720p  --.mp4
+        caption = """#I'mOld ￼ `zD2tyJysP8U` 720p  --.mp4
 
-👀 [Channel: Jemima Avison] (https://www.youtube.com/channel/UCnwewRbbRB05Z34foKOWJuA)
-📅 21.06.2025
+[👀 Channel: Jemima Avison](https://www.youtube.com/channel/UCnwewRbbRB05Z34foKOWJuA)
+__📅 21.06.2025__
 
 https://www.youtube.com/shorts/zD2tyJysP8U"""
         
@@ -25,8 +25,8 @@ https://www.youtube.com/shorts/zD2tyJysP8U"""
     def test_parse_caption_with_all_fields(self):
         caption = """#TestVideo abc123 720p
 
-👀 [Channel: Test Channel] (https://www.youtube.com/channel/UCtest)
-📅 15.03.2025
+[👀 Channel: Test Channel](https://www.youtube.com/channel/UCtest)
+__📅 15.03.2025__
 
 https://www.youtube.com/watch?v=abc123"""
         
