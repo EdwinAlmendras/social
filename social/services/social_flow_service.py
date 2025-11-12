@@ -9,6 +9,7 @@ from social.logger import get_logger
 from social.services.YT_Downloader import YT_Downloader
 from social.services.telegram_uploader import TelegramUploderService, UploadOptions
 from social.services.video_recovery_service import VideoRecoveryService
+from social.services.video_database import VideoDatabaseService
 from social.platforms.base import Platform
 from social.core.entity_resolver import EntityResolverFactory, ContentType
 
@@ -23,13 +24,14 @@ class SocialFlowService:
     3. Upload to Telegram with the caption
     """
     
-    def __init__(self, config: Config, telegram_client: Optional[TelegramClient] = None):
+    def __init__(self, config: Config, telegram_client: Optional[TelegramClient] = None, db_service: Optional[VideoDatabaseService] = None):
         """
         Initialize the social flow service.
         
         Args:
             config: Config instance with platform and entity configurations
             telegram_client: Optional TelegramClient for video recovery
+            db_service: Optional VideoDatabaseService for duplicate checking
         """
         self.config = config
         self.downloader = YT_Downloader(config)
@@ -40,6 +42,9 @@ class SocialFlowService:
         
         # Initialize recovery service if telegram client provided
         self.recovery_service = VideoRecoveryService(config, telegram_client) if telegram_client else None
+        
+        # Database service for duplicate checking
+        self.db_service = db_service
     
     def _get_downloaded_file_path(self, info_dict: Dict[str, Any], platform: Platform) -> Optional[Path]:
         """
@@ -167,6 +172,19 @@ class SocialFlowService:
         """
         recovered = False
         try:
+            # Check for duplicates before downloading
+            if self.db_service and self.db_service.is_duplicate(url):
+                from social.services.url_id_extractor import URLIDExtractor
+                video_id = URLIDExtractor.extract_id(url)
+                logger.info(f"Duplicate detected: {video_id}, skipping download")
+                return {
+                    'success': False,
+                    'url': url,
+                    'error': 'Duplicate video',
+                    'message': f"Video {video_id} already exists in database",
+                    'duplicate': True
+                }
+            
             # Step 1: Download video
             logger.info(f"Starting download process for: {url}")
             info_dict = await self._download_video_async(url, platform=platform)

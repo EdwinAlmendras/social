@@ -49,7 +49,6 @@ async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
     
     try:
         scanner = TelegramMessageScanner(telegram_client)
-        social_flow = SocialFlowService(config, telegram_client=telegram_client)
         
         config.load_entities()
         entities = getattr(config, 'ENTITIES', {})
@@ -57,33 +56,25 @@ async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
         db_services = {}
         if skip_duplicates:
             try:
-                first_url = None
-                messages = await scanner.scan_group(group_id, limit=10)
-                for msg in messages:
-                    if msg['urls']:
-                        first_url = msg['urls'][0]
-                        break
-                
-                if first_url:
-                    platform = URLIDExtractor.detect_platform(first_url)
-                    if platform:
-                        platform_config = entities.get(platform.lower())
-                        if platform_config:
-                            db_group_id = platform_config.get('group_id')
-                            db_msg_id = platform_config.get('db_id')
-                            
-                            if db_group_id and db_msg_id:
-                                db_service = VideoDatabaseService(
-                                    client=telegram_client,
-                                    db_entity_id=db_group_id,
-                                    db_message_id=db_msg_id
-                                )
-                                console.print("Loading database...")
-                                await db_service.load()
-                                console.print(f"Loaded {len(db_service.video_ids)} IDs")
-                                db_services[platform] = db_service
+                console.print("Loading databases for all platforms...")
+                for platform_name, platform_config in entities.items():
+                    db_group_id = platform_config.get('group_id')
+                    db_msg_id = platform_config.get('db_id')
+                    
+                    if db_group_id and db_msg_id:
+                        try:
+                            db_service = VideoDatabaseService(
+                                client=telegram_client,
+                                db_entity_id=db_group_id,
+                                db_message_id=db_msg_id
+                            )
+                            await db_service.load()
+                            db_services[platform_name] = db_service
+                            console.print(f"  {platform_name}: {len(db_service.video_ids)} IDs")
+                        except Exception as e:
+                            console.print(f"  Warning: Could not load {platform_name} database: {e}")
             except Exception as e:
-                console.print(f"Warning: Could not load database: {e}")
+                console.print(f"Warning: Could not load databases: {e}")
         
         console.print(f"Scanning group {group_id}...")
         messages = await scanner.scan_group(group_id, limit)
@@ -107,13 +98,6 @@ async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
                     console.print(f"Skip: unknown platform - {url}")
                     continue
                 
-                db_service = db_services.get(platform)
-                
-                if db_service and db_service.is_duplicate(url):
-                    console.print(f"Skip: duplicate - {video_id}")
-                    skipped += 1
-                    continue
-                
                 platform_config = entities.get(platform.lower(), {})
                 entity_id = platform_config.get('group_id')
                 topic_id = platform_config.get('topic_id')
@@ -121,6 +105,16 @@ async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
                 if not entity_id:
                     console.print(f"Skip: no config for {platform} - {video_id}")
                     continue
+                
+                # Get db_service for this platform
+                db_service = db_services.get(platform.lower())
+                
+                # Create SocialFlowService with db_service for duplicate checking
+                social_flow = SocialFlowService(
+                    config, 
+                    telegram_client=telegram_client,
+                    db_service=db_service
+                )
                 
                 console.print(f"Processing: {url}")
                 try:
@@ -136,6 +130,9 @@ async def _run_scan(group_id: int, limit: int, skip_duplicates: bool):
                         console.print(f"OK: {video_id}")
                         if db_service:
                             db_service.add_id(video_id)
+                    elif result.get('duplicate'):
+                        skipped += 1
+                        console.print(f"Skip: duplicate - {video_id}")
                     else:
                         failed += 1
                         console.print(f"FAIL: {video_id}")
